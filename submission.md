@@ -91,4 +91,4 @@ I changed the cutoff from a rolling 24-hour window to the start of the current d
 
 # Git Log Screenshot
 
-(Add your screenshot here before submitting.)
+![Git log showing separate commits](images/git-log.png)
