@@ -35,15 +35,16 @@ That endpoint returned `count: 6`, which confirmed the bug because the playlist 
 
 ### How I found the root cause
 
-(To be completed.)
+I started from the endpoint GET /playlists/<playlist_id>/songs, then looked at routes/playlists.py to see which service function it called. That led me to get_playlist_songs() in services/playlist_service.py. The query itself returned the playlist songs in position order, but the return statement used songs[:-1], which removes the final song from the list.
 
 ### The root cause
 
-(To be completed.)
+The get_playlist_songs() function was slicing the song list with songs[:-1]. In Python, that returns every item except the last one. Since the playlist songs were already ordered by position, the last item was always the most recently added song. This caused the newest playlist song to be hidden every time.
 
-### My fix and side-effect check
 
-(To be completed.)
+### My fix and check
+
+I changed the return statement from songs[:-1] to songs so the function returns every song in the playlist. After the fix, I refreshed the Friday Energy playlist songs endpoint and confirmed the count changed from 6 to 7, matching the playlist detail endpoint.
 
 ---
 
