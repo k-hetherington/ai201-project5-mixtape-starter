@@ -77,13 +77,16 @@ I added a create_notification() call after the rating commit, only when the rate
 ## Issue #2 – Friends Listening Now
 
 ### How I reproduced it
+I read the issue description and traced the endpoint GET /feed/<user_id>/listening-now. The issue described that users who listened late the previous evening still appeared in the "Listening Now" feed the next morning. I tested the endpoint using one of the seeded users and confirmed that the feed logic was based on a rolling time window rather than the current calendar day.
 
 ### How I found the root cause
+I started with the route in routes/feed.py, which calls get_friends_listening_now() in services/feed_service.py. Inside that function, I found the cutoff time was calculated using datetime.now(timezone.utc) minus a 24-hour timedelta. That explained why listening events from yesterday evening were still included the following morning.
 
 ### The root cause
+The function filtered listening events using a rolling 24-hour window (datetime.now() - timedelta(hours=24)). That allowed listening events from late the previous evening to remain visible the next morning. The feature requirements expected "Listening Now" to include only events from the current calendar day.
 
-### My fix and side-effect check
-
+### My fix and check
+I changed the cutoff from a rolling 24-hour window to the start of the current day by setting the cutoff time to midnight. This ensures that only today's listening events appear in the feed. I verified that events from the current day are still returned while events from the previous day are excluded.
 ---
 
 # Git Log Screenshot
