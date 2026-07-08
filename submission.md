@@ -52,11 +52,25 @@ I changed the return statement from songs[:-1] to songs so the function returns 
 
 ### How I reproduced it
 
+I traced the rating endpoint from routes/songs.py. The route POST /songs/<song_id>/rate calls rate_song() in services/notification_service.py.
+
+Before changing the code, I rated a song shared by another user and then checked the original sharer's notifications endpoint:
+
+GET /users/<shared_by_user_id>/notifications
+
+The rating was saved, but no notification appeared, which matched the reported issue.
+
 ### How I found the root cause
+
+I compared the working playlist notification path to the rating path in services/notification_service.py. The add_to_playlist() function creates a notification after adding a song to a playlist. The rate_song() function had similar user and song lookup logic, but after saving the rating it only committed and returned the rating. It never created a notification.
 
 ### The root cause
 
-### My fix and side-effect check
+The rating logic was missing the notification creation step. The function saved or updated a Rating record, but it did not call create_notification() afterward. Because of that, the rating existed in the database, but the song sharer never received a notification.
+
+### My fix and check
+
+I added a create_notification() call after the rating commit, only when the rater is not the original sharer. This matches the pattern used by playlist-add notifications and avoids notifying users about their own actions. After the fix, I rated another user's song again and confirmed that the original sharer received a new song_rated notification.
 
 ---
 
