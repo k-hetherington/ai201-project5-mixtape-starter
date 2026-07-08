@@ -1,6 +1,10 @@
 # AI Usage
 
-(To be completed as we work.)
+I used AI during the codebase orientation phase to better understand the structure of the project before fixing any bugs. After reading the project files myself, I asked AI to explain the responsibilities of the main files and help trace how requests moved from the route layer to the service layer. This helped me build my codebase map before I started debugging.
+
+I also used AI while investigating bugs to compare similar code paths and explain unfamiliar logic. For example, when debugging the rating notification issue, I compared the working `add_to_playlist()` function with the `rate_song()` function to identify why one created notifications while the other did not.
+
+I verified the AI's suggestions by reproducing each bug myself using the Flask endpoints, reading the relevant source code, and confirming the behavior before making any changes. One example where I had to verify the AI's guidance was when I initially attempted to reproduce the playlist bug using `/playlists/1`. After inspecting the database through the Python shell, I discovered the application uses UUIDs rather than numeric IDs, so I adjusted my testing accordingly.
 
 ---
 
@@ -8,11 +12,20 @@
 
 ## Main Files
 
-(To be completed.)
+- **app.py** creates the Flask application, configures the database, and registers all route blueprints.
+- **models.py** defines the SQLAlchemy models used throughout the application, including users, songs, playlists, listening events, ratings, notifications, and the association tables between songs, playlists, and tags.
+- **routes/** contains the API endpoints. Each route validates request data, calls the appropriate service function, and returns a JSON response.
+- **services/** contains the application's business logic. Each service focuses on a specific feature such as playlists, notifications, searching, listening streaks, or feed generation.
+- **seed_data.py** recreates and populates the database with users, songs, playlists, listening history, ratings, and notifications for testing.
+- **tests/** contains automated tests for several application features.
 
-## Data Flow
+## Data Flow Example
 
-(To be completed.)
+When a user requests a playlist's songs, the request first reaches `routes/playlists.py` through the `GET /playlists/<playlist_id>/songs` endpoint. That route calls `get_playlist_songs()` in `services/playlist_service.py`. The service queries the playlist entries table, joins it with the `Song` model, orders the songs by their playlist position, converts each song into a dictionary using `to_dict()`, and returns the results. The route then formats the response as JSON and sends it back to the client.
+
+## Architecture Pattern
+
+The application follows a clear separation of responsibilities. The route files remain lightweight by handling request validation and response formatting, while nearly all business logic lives inside the service layer. Database access is performed through SQLAlchemy models, allowing multiple routes to reuse the same service functions.
 
 ---
 
@@ -44,7 +57,7 @@ The get_playlist_songs() function was slicing the song list with songs[:-1]. In 
 
 ### My fix and check
 
-I changed the return statement from songs[:-1] to songs so the function returns every song in the playlist. After the fix, I refreshed the Friday Energy playlist songs endpoint and confirmed the count changed from 6 to 7, matching the playlist detail endpoint.
+I changed the return statement from songs[:-1] to songs so the function returns every song in the playlist. After the fix, I refreshed the Friday Energy playlist songs endpoint and confirmed the count changed from 6 to 7, matching the playlist detail endpoint. I also confirmed that the songs were still returned in playlist order because the query continued ordering by `playlist_entries.position`.
 
 ---
 
@@ -70,7 +83,7 @@ The rating logic was missing the notification creation step. The function saved 
 
 ### My fix and check
 
-I added a create_notification() call after the rating commit, only when the rater is not the original sharer. This matches the pattern used by playlist-add notifications and avoids notifying users about their own actions. After the fix, I rated another user's song again and confirmed that the original sharer received a new song_rated notification.
+I added a create_notification() call after the rating commit, only when the rater is not the original sharer. This matches the pattern used by playlist-add notifications and avoids notifying users about their own actions. After the fix, I rated another user's song again and confirmed that the original sharer received a new `song_rated` notification. I also verified that users do not receive notifications for rating their own songs because the existing self-notification check remained in place.
 
 ---
 
@@ -86,9 +99,13 @@ I started with the route in routes/feed.py, which calls get_friends_listening_no
 The function filtered listening events using a rolling 24-hour window (datetime.now() - timedelta(hours=24)). That allowed listening events from late the previous evening to remain visible the next morning. The feature requirements expected "Listening Now" to include only events from the current calendar day.
 
 ### My fix and check
-I changed the cutoff from a rolling 24-hour window to the start of the current day by setting the cutoff time to midnight. This ensures that only today's listening events appear in the feed. I verified that events from the current day are still returned while events from the previous day are excluded.
+I changed the cutoff from a rolling 24-hour window to the start of the current day by setting the cutoff time to midnight. This ensures that only today's listening events appear in the feed. I verified that the endpoint still returned today's listening events after the change while excluding events from the previous day. I also confirmed that the function continued filtering only the current user's friends, so unrelated users did not appear in the feed.
 ---
 
 # Git Log Screenshot
 
 ![Git log showing separate commits](images/git-log.png)
+
+# Regression Test
+
+I added `tests/test_playlist_regression.py` to verify that `get_playlist_songs()` returns the same number of songs as the playlist relationship contains. This test would have failed before the Issue #5 fix because the function used `songs[:-1]`, which always removed the final song from the returned list.
